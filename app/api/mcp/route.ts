@@ -64,6 +64,24 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ meals: rows });
       }
 
+      case 'clear_meal_slot': {
+        // data: { plan_date, meal_slot }
+        await sql`
+          DELETE FROM meal_plan 
+          WHERE plan_date = ${data.plan_date} AND meal_slot = ${data.meal_slot}
+        `;
+        return NextResponse.json({ success: true });
+      }
+
+      case 'clear_day_plan': {
+        // data: { plan_date }
+        await sql`
+          DELETE FROM meal_plan 
+          WHERE plan_date = ${data.plan_date}
+        `;
+        return NextResponse.json({ success: true });
+      }
+
       default:
         return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
     }
