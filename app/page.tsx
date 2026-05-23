@@ -2,6 +2,75 @@
 import { useState, useEffect, useCallback } from 'react';
 import { format, startOfWeek, addDays, isToday } from 'date-fns';
 
+function PinScreen({ onUnlock }: { onUnlock: () => void }) {
+  const [pin, setPin] = useState('');
+  const [error, setError] = useState(false);
+  const [shake, setShake] = useState(false);
+
+  const handleDigit = (d: string) => {
+    if (pin.length >= 4) return;
+    const next = pin + d;
+    setPin(next);
+    setError(false);
+    if (next.length === 4) {
+      setTimeout(() => verify(next), 100);
+    }
+  };
+
+  const verify = async (code: string) => {
+    const res = await fetch(`/api/pin?pin=${code}`);
+    const data = await res.json();
+    if (data.valid) {
+      localStorage.setItem('panel_pin_ok', '1');
+      onUnlock();
+    } else {
+      setShake(true);
+      setError(true);
+      setPin('');
+      setTimeout(() => setShake(false), 500);
+    }
+  };
+
+  const handleDelete = () => setPin(p => p.slice(0, -1));
+
+  return (
+    <div style={{ minHeight: '100vh', background: '#0a0a0a', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', fontFamily: "'DM Sans', sans-serif" }}>
+      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+      <div style={{ marginBottom: '48px', textAlign: 'center' }}>
+        <h1 style={{ fontSize: '22px', fontWeight: 600, color: '#f0ece4', margin: 0, letterSpacing: '-0.5px' }}>Panel Nutrition</h1>
+        <p style={{ fontSize: '12px', color: '#444', fontFamily: "'DM Mono', monospace", marginTop: '6px' }}>ENTER PIN</p>
+      </div>
+      <div style={{ display: 'flex', gap: '16px', marginBottom: '48px' }}>
+        {[0,1,2,3].map(i => (
+          <div key={i} style={{
+            width: '16px', height: '16px', borderRadius: '50%',
+            background: pin.length > i ? (error ? '#c0392b' : '#c8b89a') : '#1e1e1e',
+            border: `1px solid ${pin.length > i ? 'transparent' : '#2a2a2a'}`,
+            transition: 'all 0.15s',
+            transform: shake ? 'translateX(4px)' : 'none',
+          }} />
+        ))}
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', width: '240px' }}>
+        {['1','2','3','4','5','6','7','8','9','','0','⌫'].map((d, i) => (
+          <button key={i} onClick={() => d === '⌫' ? handleDelete() : d ? handleDigit(d) : null}
+            disabled={!d}
+            style={{
+              height: '64px', borderRadius: '14px',
+              background: d === '⌫' ? '#1a1a1a' : d ? '#141414' : 'transparent',
+              border: `1px solid ${d ? '#1e1e1e' : 'transparent'}`,
+              color: '#f0ece4', fontSize: d === '⌫' ? '20px' : '22px',
+              fontWeight: 400, cursor: d ? 'pointer' : 'default',
+              transition: 'background 0.1s',
+            }}>
+            {d}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 const MEAL_SLOTS = [
   { key: 'breakfast', label: 'Breakfast', emoji: '🌅' },
   { key: 'pre_workout', label: 'Pre-Workout', emoji: '⚡' },
@@ -27,6 +96,21 @@ interface PlanSlot {
 type View = 'today' | 'week' | 'meals';
 
 export default function App() {
+  const [unlocked, setUnlocked] = useState(false);
+  const [checkingPin, setCheckingPin] = useState(true);
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const ok = localStorage.getItem('panel_pin_ok');
+      if (ok === '1') setUnlocked(true);
+      setCheckingPin(false);
+    }
+  }, []);
+  if (checkingPin) return null;
+  if (!unlocked) return <PinScreen onUnlock={() => setUnlocked(true)} />;
+  return <AppInner />;
+}
+
+function AppInner() {
   const [view, setView] = useState<View>('today');
   const [planSlots, setPlanSlots] = useState<PlanSlot[]>([]);
   const [meals, setMeals] = useState<Meal[]>([]);
