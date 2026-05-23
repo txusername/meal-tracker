@@ -1,4 +1,4 @@
-import { sql } from '../../../lib/db';
+import { sql } from '../../../../lib/db';
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
