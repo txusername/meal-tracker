@@ -1,16 +1,16 @@
 import { sql } from '../../../../lib/db';
 import { NextRequest, NextResponse } from 'next/server';
 
-export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params;
     const { name, category, calories, protein, carbs, fiber, fat, notes } = await req.json();
-    const id = parseInt(params.id);
     const rows = await sql`
       UPDATE meals
       SET name = ${name}, category = ${category}, calories = ${calories},
           protein = ${protein}, carbs = ${carbs}, fiber = ${fiber},
           fat = ${fat}, notes = ${notes}
-      WHERE id = ${id}
+      WHERE id = ${parseInt(id)}
       RETURNING *
     `;
     if (!rows.length) return NextResponse.json({ error: 'Meal not found' }, { status: 404 });
