@@ -197,8 +197,11 @@ function AppInner() {
   const todaySlots = planSlots.filter(s => s.plan_date.startsWith(format(selectedDate, 'yyyy-MM-dd')));
   const checkedSlots = todaySlots.filter(s => s.checked_off);
   const todayMacros = checkedSlots.reduce((acc, s) => ({
-    calories: acc.calories + s.calories, protein: acc.protein + s.protein,
-    carbs: acc.carbs + s.carbs, fiber: acc.fiber + s.fiber, fat: acc.fat + s.fat,
+    calories: acc.calories + Number(s.calories),
+    protein: acc.protein + Number(s.protein),
+    carbs: acc.carbs + Number(s.carbs),
+    fiber: acc.fiber + Number(s.fiber),
+    fat: acc.fat + Number(s.fat),
   }), { calories: 0, protein: 0, carbs: 0, fiber: 0, fat: 0 });
 
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
