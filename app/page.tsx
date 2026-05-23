@@ -40,6 +40,7 @@ function PinScreen({ onUnlock }: { onUnlock: () => void }) {
         <h1 style={{ fontSize: '22px', fontWeight: 600, color: '#f0ece4', margin: 0, letterSpacing: '-0.5px' }}>Panel Nutrition</h1>
         <p style={{ fontSize: '12px', color: '#444', fontFamily: "'DM Mono', monospace", marginTop: '6px' }}>ENTER PIN</p>
       </div>
+
       <div style={{ display: 'flex', gap: '16px', marginBottom: '48px' }}>
         {[0,1,2,3].map(i => (
           <div key={i} style={{
@@ -51,6 +52,7 @@ function PinScreen({ onUnlock }: { onUnlock: () => void }) {
           }} />
         ))}
       </div>
+
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', width: '240px' }}>
         {['1','2','3','4','5','6','7','8','9','','0','⌫'].map((d, i) => (
           <button key={i} onClick={() => d === '⌫' ? handleDelete() : d ? handleDigit(d) : null}
@@ -118,6 +120,8 @@ function AppInner() {
   const [selectedDate, setSelectedDate] = useState(() => new Date());
   const [showAddMeal, setShowAddMeal] = useState(false);
   const [addMealForm, setAddMealForm] = useState({ name:'', category:'breakfast', calories:'', protein:'', carbs:'', fiber:'', fat:'', notes:'' });
+  const [editMeal, setEditMeal] = useState<Meal | null>(null);
+  const [editMealForm, setEditMealForm] = useState({ name:'', category:'breakfast', calories:'', protein:'', carbs:'', fiber:'', fat:'', notes:'' });
   const [loading, setLoading] = useState(false);
 
   const fetchPlan = useCallback(async () => {
@@ -165,7 +169,32 @@ function AppInner() {
     fetchMeals();
   };
 
-  const todaySlots = planSlots.filter(s => s.plan_date.startsWith(format(selectedDate, 'yyyy-MM-dd')));
+  const openEditMeal = (meal: Meal) => {
+    setEditMeal(meal);
+    setEditMealForm({
+      name: meal.name, category: meal.category,
+      calories: String(meal.calories), protein: String(meal.protein),
+      carbs: String(meal.carbs), fiber: String(meal.fiber),
+      fat: String(meal.fat), notes: meal.notes || '',
+    });
+  };
+
+  const updateMeal = async () => {
+    if (!editMeal || !editMealForm.name || !editMealForm.calories) return;
+    await fetch(`/api/meals/${editMeal.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...editMealForm,
+        calories: Number(editMealForm.calories), protein: Number(editMealForm.protein),
+        carbs: Number(editMealForm.carbs), fiber: Number(editMealForm.fiber), fat: Number(editMealForm.fat),
+      }),
+    });
+    setEditMeal(null);
+    fetchMeals();
+  };
+
+  const todaySlots = planSlots.filter(s => s.plan_date === format(selectedDate, 'yyyy-MM-dd'));
   const checkedSlots = todaySlots.filter(s => s.checked_off);
   const todayMacros = checkedSlots.reduce((acc, s) => ({
     calories: acc.calories + s.calories, protein: acc.protein + s.protein,
@@ -203,7 +232,7 @@ function AppInner() {
           <WeekView days={weekDays} slots={planSlots} onCheck={checkOff} onDaySelect={d => { setSelectedDate(d); setView('today'); }} />
         )}
         {view === 'meals' && (
-          <MealsView meals={meals} onAdd={() => setShowAddMeal(true)} />
+          <MealsView meals={meals} onAdd={() => setShowAddMeal(true)} onEdit={openEditMeal} />
         )}
       </div>
 
@@ -223,6 +252,45 @@ function AppInner() {
           </button>
         ))}
       </div>
+
+      {/* Edit Meal Modal */}
+      {editMeal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'flex-end', zIndex: 100 }}>
+          <div style={{ background: '#141414', width: '100%', borderRadius: '20px 20px 0 0', padding: '24px 20px', maxHeight: '90vh', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 600 }}>Edit Meal</h2>
+              <button onClick={() => setEditMeal(null)} style={{ background: 'none', border: 'none', color: '#666', fontSize: '24px', cursor: 'pointer' }}>×</button>
+            </div>
+            {[
+              { key: 'name', label: 'Meal Name', type: 'text' },
+              { key: 'calories', label: 'Calories', type: 'number' },
+              { key: 'protein', label: 'Protein (g)', type: 'number' },
+              { key: 'carbs', label: 'Carbs (g)', type: 'number' },
+              { key: 'fiber', label: 'Fiber (g)', type: 'number' },
+              { key: 'fat', label: 'Fat (g)', type: 'number' },
+              { key: 'notes', label: 'Notes', type: 'text' },
+            ].map(f => (
+              <div key={f.key} style={{ marginBottom: '12px' }}>
+                <label style={{ fontSize: '11px', color: '#666', fontFamily: "'DM Mono', monospace", display: 'block', marginBottom: '4px' }}>{f.label.toUpperCase()}</label>
+                <input type={f.type} value={(editMealForm as any)[f.key]}
+                  onChange={e => setEditMealForm(prev => ({ ...prev, [f.key]: e.target.value }))}
+                  style={{ width: '100%', background: '#1e1e1e', border: '1px solid #2a2a2a', borderRadius: '8px', padding: '10px 12px', color: '#f0ece4', fontSize: '14px', boxSizing: 'border-box' }} />
+              </div>
+            ))}
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ fontSize: '11px', color: '#666', fontFamily: "'DM Mono', monospace", display: 'block', marginBottom: '4px' }}>CATEGORY</label>
+              <select value={editMealForm.category} onChange={e => setEditMealForm(prev => ({ ...prev, category: e.target.value }))}
+                style={{ width: '100%', background: '#1e1e1e', border: '1px solid #2a2a2a', borderRadius: '8px', padding: '10px 12px', color: '#f0ece4', fontSize: '14px' }}>
+                {MEAL_SLOTS.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
+              </select>
+            </div>
+            <button onClick={updateMeal}
+              style={{ width: '100%', background: '#c8b89a', color: '#0a0a0a', border: 'none', borderRadius: '10px', padding: '14px', fontSize: '15px', fontWeight: 600, cursor: 'pointer' }}>
+              Save Changes
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Add Meal Modal */}
       {showAddMeal && (
@@ -347,7 +415,7 @@ function WeekView({ days, slots, onCheck, onDaySelect }: { days: Date[], slots: 
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
       {days.map(day => {
         const dateStr = format(day, 'yyyy-MM-dd');
-        const daySlots = slots.filter(s => s.plan_date.startsWith(dateStr));
+        const daySlots = slots.filter(s => s.plan_date === dateStr);
         const checked = daySlots.filter(s => s.checked_off).length;
         const pct = daySlots.length > 0 ? (checked / daySlots.length) * 100 : 0;
         return (
@@ -372,7 +440,7 @@ function WeekView({ days, slots, onCheck, onDaySelect }: { days: Date[], slots: 
   );
 }
 
-function MealsView({ meals, onAdd }: { meals: Meal[], onAdd: () => void }) {
+function MealsView({ meals, onAdd, onEdit }: { meals: Meal[], onAdd: () => void, onEdit: (m: Meal) => void }) {
   const grouped = MEAL_SLOTS.reduce((acc, slot) => {
     acc[slot.key] = meals.filter(m => m.category === slot.key);
     return acc;
@@ -395,9 +463,16 @@ function MealsView({ meals, onAdd }: { meals: Meal[], onAdd: () => void }) {
             </div>
             {slotMeals.map(meal => (
               <div key={meal.id} style={{ background: '#141414', border: '1px solid #1e1e1e', borderRadius: '10px', padding: '12px 14px', marginBottom: '8px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ fontSize: '14px', fontWeight: 500 }}>{meal.name}</span>
-                  <span style={{ fontSize: '13px', color: '#c8b89a', fontFamily: "'DM Mono', monospace" }}>{meal.calories}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <span style={{ fontSize: '13px', color: '#c8b89a', fontFamily: "'DM Mono', monospace" }}>{meal.calories}</span>
+                    <button onClick={() => onEdit(meal)}
+                      style={{ background: 'none', border: '1px solid #2a2a2a', borderRadius: '6px', color: '#555', fontSize: '11px',
+                        fontFamily: "'DM Mono', monospace", padding: '3px 8px', cursor: 'pointer', letterSpacing: '0.5px' }}>
+                      EDIT
+                    </button>
+                  </div>
                 </div>
                 <div style={{ fontSize: '11px', color: '#444', fontFamily: "'DM Mono', monospace", marginTop: '4px' }}>
                   P{meal.protein}g · C{meal.carbs}g · Fi{meal.fiber}g · Fa{meal.fat}g
