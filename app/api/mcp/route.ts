@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
         // data: array of { plan_date, meal_slot, meal_id }
         const results = [];
         for (const slot of data) {
-          const { rows } = await sql`
+          const rows = await sql`
             INSERT INTO meal_plan (plan_date, meal_slot, meal_id)
             VALUES (${slot.plan_date}, ${slot.meal_slot}, ${slot.meal_id})
             ON CONFLICT (plan_date, meal_slot) DO UPDATE SET meal_id = ${slot.meal_id}, checked_off = false
@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
       case 'add_meal': {
         // data: meal object
         const { name, category, calories, protein, carbs, fiber, fat, notes } = data;
-        const { rows } = await sql`
+        const rows = await sql`
           INSERT INTO meals (name, category, calories, protein, carbs, fiber, fat, notes)
           VALUES (${name}, ${category}, ${calories}, ${protein}, ${carbs}, ${fiber || 0}, ${fat}, ${notes || null})
           RETURNING *
@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
 
       case 'get_compliance': {
         // data: { start_date, end_date }
-        const { rows } = await sql`
+        const rows = await sql`
           SELECT 
             plan_date,
             COUNT(*) as total_slots,
@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
       }
 
       case 'get_meals': {
-        const { rows } = await sql`SELECT * FROM meals ORDER BY category, name`;
+        const rows = await sql`SELECT * FROM meals ORDER BY category, name`;
         return NextResponse.json({ meals: rows });
       }
 
@@ -81,3 +81,4 @@ export async function GET(req: NextRequest) {
     actions: ['post_weekly_plan', 'add_meal', 'get_compliance', 'get_meals']
   });
 }
+

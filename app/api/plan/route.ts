@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
       endDate = sunday.toISOString().split('T')[0];
     }
 
-    const { rows } = await sql`
+    const rows = await sql`
       SELECT mp.*, 
         m.name, m.category, m.calories, m.protein, m.carbs, m.fiber, m.fat, m.notes
       FROM meal_plan mp
@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const { plan_date, meal_slot, meal_id } = await req.json();
-    const { rows } = await sql`
+    const rows = await sql`
       INSERT INTO meal_plan (plan_date, meal_slot, meal_id)
       VALUES (${plan_date}, ${meal_slot}, ${meal_id})
       ON CONFLICT (plan_date, meal_slot) DO UPDATE SET meal_id = ${meal_id}
@@ -59,3 +59,4 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ error: 'Failed to delete' }, { status: 500 });
   }
 }
+

@@ -1,14 +1,6 @@
 import { neon } from '@neondatabase/serverless';
 
-const neonSql = neon(process.env.DATABASE_URL!);
-
-// Wrap neon to return { rows } like @vercel/postgres did
-export const sql = new Proxy(neonSql, {
-  apply: async (target, thisArg, args) => {
-    const rows = await Reflect.apply(target, thisArg, args);
-    return { rows };
-  }
-}) as unknown as typeof neonSql & ((...args: any[]) => Promise<{ rows: any[] }>);
+export const sql = neon(process.env.DATABASE_URL!);
 
 export interface Meal {
   id: number; name: string; category: string;
