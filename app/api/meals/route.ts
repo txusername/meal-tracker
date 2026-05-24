@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export async function GET() {
   try {
-    const rows = await sql`SELECT * FROM meals WHERE one_off = FALSE ORDER BY category, name`;
+    const rows = await sql`SELECT * FROM meals WHERE one_off IS NOT TRUE ORDER BY category, name`;
     return NextResponse.json(rows);
   } catch (e) {
     return NextResponse.json({ error: 'Failed to fetch meals' }, { status: 500 });
