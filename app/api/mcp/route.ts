@@ -1,4 +1,4 @@
-import { sql } from '../../../lib/db';
+import { sql } from '@vercel/postgres';
 import { NextRequest, NextResponse } from 'next/server';
 
 // Verify MCP auth token
@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
         // data: array of { plan_date, meal_slot, meal_id }
         const results = [];
         for (const slot of data) {
-          const rows = await sql`
+          const { rows } = await sql`
             INSERT INTO meal_plan (plan_date, meal_slot, meal_id)
             VALUES (${slot.plan_date}, ${slot.meal_slot}, ${slot.meal_id})
             ON CONFLICT (plan_date, meal_slot) DO UPDATE SET meal_id = ${slot.meal_id}, checked_off = false
@@ -35,10 +35,10 @@ export async function POST(req: NextRequest) {
 
       case 'add_meal': {
         // data: meal object
-        const { name, category, calories, protein, carbs, fiber, fat, notes } = data;
+        const { name, category, calories, protein, carbs, fiber, fat, notes, one_off } = data;
         const rows = await sql`
-          INSERT INTO meals (name, category, calories, protein, carbs, fiber, fat, notes)
-          VALUES (${name}, ${category}, ${calories}, ${protein}, ${carbs}, ${fiber || 0}, ${fat}, ${notes || null})
+          INSERT INTO meals (name, category, calories, protein, carbs, fiber, fat, notes, one_off)
+          VALUES (${name}, ${category}, ${calories}, ${protein}, ${carbs}, ${fiber || 0}, ${fat}, ${notes || null}, ${one_off || false})
           RETURNING *
         `;
         return NextResponse.json({ success: true, meal: rows[0] });
@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
 
       case 'get_compliance': {
         // data: { start_date, end_date }
-        const rows = await sql`
+        const { rows } = await sql`
           SELECT 
             plan_date,
             COUNT(*) as total_slots,
@@ -60,26 +60,8 @@ export async function POST(req: NextRequest) {
       }
 
       case 'get_meals': {
-        const rows = await sql`SELECT * FROM meals ORDER BY category, name`;
+        const { rows } = await sql`SELECT * FROM meals ORDER BY category, name`;
         return NextResponse.json({ meals: rows });
-      }
-
-      case 'clear_meal_slot': {
-        // data: { plan_date, meal_slot }
-        await sql`
-          DELETE FROM meal_plan 
-          WHERE plan_date = ${data.plan_date} AND meal_slot = ${data.meal_slot}
-        `;
-        return NextResponse.json({ success: true });
-      }
-
-      case 'clear_day_plan': {
-        // data: { plan_date }
-        await sql`
-          DELETE FROM meal_plan 
-          WHERE plan_date = ${data.plan_date}
-        `;
-        return NextResponse.json({ success: true });
       }
 
       default:
@@ -99,4 +81,3 @@ export async function GET(req: NextRequest) {
     actions: ['post_weekly_plan', 'add_meal', 'get_compliance', 'get_meals']
   });
 }
-
