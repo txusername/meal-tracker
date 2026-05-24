@@ -63,7 +63,22 @@ export async function POST(req: NextRequest) {
         const rows = await sql`SELECT * FROM meals ORDER BY category, name`;
         return NextResponse.json({ meals: rows });
       }
+      case 'clear_meal_slot': {
+        await sql`
+          DELETE FROM meal_plan 
+          WHERE plan_date = ${data.plan_date} AND meal_slot = ${data.meal_slot}
+        `;
+        return NextResponse.json({ success: true });
+      }
 
+      case 'clear_day_plan': {
+        await sql`
+          DELETE FROM meal_plan 
+          WHERE plan_date = ${data.plan_date}
+        `;
+        return NextResponse.json({ success: true });
+      }
+      
       default:
         return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
     }
