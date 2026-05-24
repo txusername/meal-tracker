@@ -224,9 +224,9 @@ function AppInner() {
   const todaySlots = planSlots.filter(s => s.plan_date.startsWith(format(selectedDate, 'yyyy-MM-dd')));
   const checkedSlots = todaySlots.filter(s => s.checked_off);
   const todayMacros = checkedSlots.reduce((acc, s) => ({
-    calories: acc.calories + s.calories, protein: acc.protein + s.protein,
-    carbs: acc.carbs + s.carbs, fiber: acc.fiber + s.fiber, fat: acc.fat + s.fat,
-  }), { calories: 0, protein: 0, carbs: 0, fiber: 0, fat: 0 });
+    calories: acc.calories + Number(s.calories), protein: acc.protein + Number(s.protein),
+    carbs: acc.carbs + Number(s.carbs), fiber: acc.fiber + Number(s.fiber), fat: acc.fat + Number(s.fat),
+  }), { calories: 0, protein: 0, carbs: 0, fiber: 0, fat: 0 } as {calories:number,protein:number,carbs:number,fiber:number,fat:number});
 
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
@@ -500,7 +500,7 @@ function WeekView({ days, slots, onCheck, onDaySelect }: { days: Date[], slots: 
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
       {days.map(day => {
         const dateStr = format(day, 'yyyy-MM-dd');
-        const daySlots = slots.filter(s => s.plan_date === dateStr);
+        const daySlots = slots.filter(s => s.plan_date.startsWith(dateStr));
         const checked = daySlots.filter(s => s.checked_off).length;
         const pct = daySlots.length > 0 ? (checked / daySlots.length) * 100 : 0;
         return (
