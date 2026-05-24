@@ -116,12 +116,14 @@ function AppInner() {
   const [view, setView] = useState<View>('today');
   const [planSlots, setPlanSlots] = useState<PlanSlot[]>([]);
   const [meals, setMeals] = useState<Meal[]>([]);
-  const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
+  const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date(), { weekStartsOn: 0 }));
   const [selectedDate, setSelectedDate] = useState(() => new Date());
   const [showAddMeal, setShowAddMeal] = useState(false);
   const [addMealForm, setAddMealForm] = useState({ name:'', category:'breakfast', calories:'', protein:'', carbs:'', fiber:'', fat:'', notes:'' });
   const [editMeal, setEditMeal] = useState<Meal | null>(null);
   const [editMealForm, setEditMealForm] = useState({ name:'', category:'breakfast', calories:'', protein:'', carbs:'', fiber:'', fat:'', notes:'' });
+  const [showOneOff, setShowOneOff] = useState(false);
+  const [oneOffForm, setOneOffForm] = useState({ name:'', category:'dinner', calories:'', protein:'', carbs:'', fiber:'', fat:'', notes:'' });
   const [loading, setLoading] = useState(false);
 
   const fetchPlan = useCallback(async () => {
@@ -176,7 +178,8 @@ function AppInner() {
       calories: String(meal.calories), protein: String(meal.protein),
       carbs: String(meal.carbs), fiber: String(meal.fiber),
       fat: String(meal.fat), notes: meal.notes || '',
-    });
+      one_off: (meal as any).one_off || false,
+    } as any);
   };
 
   const updateMeal = async () => {
@@ -188,20 +191,41 @@ function AppInner() {
         ...editMealForm,
         calories: Number(editMealForm.calories), protein: Number(editMealForm.protein),
         carbs: Number(editMealForm.carbs), fiber: Number(editMealForm.fiber), fat: Number(editMealForm.fat),
+        one_off: (editMealForm as any).one_off || false,
       }),
     });
     setEditMeal(null);
     fetchMeals();
   };
 
+  const logOneOff = async () => {
+    if (!oneOffForm.name || !oneOffForm.calories) return;
+    const mealRes = await fetch('/api/meals', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...oneOffForm,
+        calories: Number(oneOffForm.calories), protein: Number(oneOffForm.protein),
+        carbs: Number(oneOffForm.carbs), fiber: Number(oneOffForm.fiber), fat: Number(oneOffForm.fat),
+        one_off: true,
+      }),
+    });
+    const meal = await mealRes.json();
+    await fetch('/api/plan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ plan_date: format(selectedDate, 'yyyy-MM-dd'), meal_slot: oneOffForm.category, meal_id: meal.id }),
+    });
+    setShowOneOff(false);
+    setOneOffForm({ name:'', category:'dinner', calories:'', protein:'', carbs:'', fiber:'', fat:'', notes:'' });
+    fetchPlan();
+  };
+
   const todaySlots = planSlots.filter(s => s.plan_date.startsWith(format(selectedDate, 'yyyy-MM-dd')));
   const checkedSlots = todaySlots.filter(s => s.checked_off);
   const todayMacros = checkedSlots.reduce((acc, s) => ({
-    calories: acc.calories + Number(s.calories),
-    protein: acc.protein + Number(s.protein),
-    carbs: acc.carbs + Number(s.carbs),
-    fiber: acc.fiber + Number(s.fiber),
-    fat: acc.fat + Number(s.fat),
+    calories: acc.calories + s.calories, protein: acc.protein + s.protein,
+    carbs: acc.carbs + s.carbs, fiber: acc.fiber + s.fiber, fat: acc.fat + s.fat,
   }), { calories: 0, protein: 0, carbs: 0, fiber: 0, fat: 0 });
 
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
@@ -229,7 +253,7 @@ function AppInner() {
       {/* Content */}
       <div style={{ padding: '20px' }}>
         {view === 'today' && (
-          <TodayView slots={todaySlots} onCheck={checkOff} />
+          <TodayView slots={todaySlots} onCheck={checkOff} onLogOneOff={() => setShowOneOff(true)} />
         )}
         {view === 'week' && (
           <WeekView days={weekDays} slots={planSlots} onCheck={checkOff} onDaySelect={d => { setSelectedDate(d); setView('today'); }} />
@@ -255,6 +279,46 @@ function AppInner() {
           </button>
         ))}
       </div>
+
+      {/* One-Off Meal Modal */}
+      {showOneOff && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'flex-end', zIndex: 100 }}>
+          <div style={{ background: '#141414', width: '100%', borderRadius: '20px 20px 0 0', padding: '24px 20px', maxHeight: '90vh', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+              <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 600 }}>Log One-Off Meal</h2>
+              <button onClick={() => setShowOneOff(false)} style={{ background: 'none', border: 'none', color: '#666', fontSize: '24px', cursor: 'pointer' }}>×</button>
+            </div>
+            <p style={{ fontSize: '12px', color: '#555', marginBottom: '20px', fontFamily: "'DM Mono', monospace" }}>SAVED TO TODAY ONLY · NOT ADDED TO LIBRARY</p>
+            {[
+              { key: 'name', label: 'Meal Name', type: 'text' },
+              { key: 'calories', label: 'Calories', type: 'number' },
+              { key: 'protein', label: 'Protein (g)', type: 'number' },
+              { key: 'carbs', label: 'Carbs (g)', type: 'number' },
+              { key: 'fiber', label: 'Fiber (g)', type: 'number' },
+              { key: 'fat', label: 'Fat (g)', type: 'number' },
+              { key: 'notes', label: 'Notes', type: 'text' },
+            ].map(f => (
+              <div key={f.key} style={{ marginBottom: '12px' }}>
+                <label style={{ fontSize: '11px', color: '#666', fontFamily: "'DM Mono', monospace", display: 'block', marginBottom: '4px' }}>{f.label.toUpperCase()}</label>
+                <input type={f.type} value={(oneOffForm as any)[f.key]}
+                  onChange={e => setOneOffForm(prev => ({ ...prev, [f.key]: e.target.value }))}
+                  style={{ width: '100%', background: '#1e1e1e', border: '1px solid #2a2a2a', borderRadius: '8px', padding: '10px 12px', color: '#f0ece4', fontSize: '14px', boxSizing: 'border-box' }} />
+              </div>
+            ))}
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ fontSize: '11px', color: '#666', fontFamily: "'DM Mono', monospace", display: 'block', marginBottom: '4px' }}>MEAL SLOT</label>
+              <select value={oneOffForm.category} onChange={e => setOneOffForm(prev => ({ ...prev, category: e.target.value }))}
+                style={{ width: '100%', background: '#1e1e1e', border: '1px solid #2a2a2a', borderRadius: '8px', padding: '10px 12px', color: '#f0ece4', fontSize: '14px' }}>
+                {MEAL_SLOTS.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
+              </select>
+            </div>
+            <button onClick={logOneOff}
+              style={{ width: '100%', background: '#c8b89a', color: '#0a0a0a', border: 'none', borderRadius: '10px', padding: '14px', fontSize: '15px', fontWeight: 600, cursor: 'pointer' }}>
+              Log Meal
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Edit Meal Modal */}
       {editMeal && (
@@ -286,6 +350,18 @@ function AppInner() {
                 style={{ width: '100%', background: '#1e1e1e', border: '1px solid #2a2a2a', borderRadius: '8px', padding: '10px 12px', color: '#f0ece4', fontSize: '14px' }}>
                 {MEAL_SLOTS.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
               </select>
+            </div>
+            <div style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px', background: '#1e1e1e', borderRadius: '8px' }}>
+              <div>
+                <div style={{ fontSize: '13px', fontWeight: 500 }}>One-off meal</div>
+                <div style={{ fontSize: '11px', color: '#555', marginTop: '2px' }}>Hide from meal library</div>
+              </div>
+              <button onClick={() => setEditMealForm(prev => ({ ...prev, one_off: !(prev as any).one_off }))}
+                style={{ width: '44px', height: '24px', borderRadius: '12px', border: 'none', cursor: 'pointer', transition: 'background 0.2s',
+                  background: (editMealForm as any).one_off ? '#c8b89a' : '#2a2a2a', position: 'relative' }}>
+                <span style={{ position: 'absolute', top: '2px', width: '20px', height: '20px', borderRadius: '50%', background: '#f0ece4', transition: 'left 0.2s',
+                  left: (editMealForm as any).one_off ? '22px' : '2px' }} />
+              </button>
             </div>
             <button onClick={updateMeal}
               style={{ width: '100%', background: '#c8b89a', color: '#0a0a0a', border: 'none', borderRadius: '10px', padding: '14px', fontSize: '15px', fontWeight: 600, cursor: 'pointer' }}>
@@ -368,12 +444,13 @@ function MacroBar({ macros, targets }: { macros: any, targets: any }) {
   );
 }
 
-function TodayView({ slots, onCheck }: { slots: PlanSlot[], onCheck: (s: PlanSlot) => void }) {
+function TodayView({ slots, onCheck, onLogOneOff }: { slots: PlanSlot[], onCheck: (s: PlanSlot) => void, onLogOneOff: () => void }) {
   if (slots.length === 0) return (
     <div style={{ textAlign: 'center', padding: '60px 20px', color: '#444' }}>
       <div style={{ fontSize: '40px', marginBottom: '16px' }}>📋</div>
       <div style={{ fontSize: '14px', fontFamily: "'DM Mono', monospace" }}>NO MEALS PLANNED FOR TODAY</div>
       <div style={{ fontSize: '12px', marginTop: '8px', color: '#333' }}>The panel will post your weekly plan here</div>
+      <button onClick={onLogOneOff} style={{ marginTop: '20px', background: '#1e1e1e', border: '1px dashed #2a2a2a', borderRadius: '10px', padding: '10px 20px', color: '#666', fontSize: '12px', fontFamily: "'DM Mono', monospace", cursor: 'pointer' }}>+ LOG A MEAL</button>
     </div>
   );
 
@@ -409,6 +486,11 @@ function TodayView({ slots, onCheck }: { slots: PlanSlot[], onCheck: (s: PlanSlo
           </button>
         );
       })}
+      <button onClick={onLogOneOff}
+        style={{ background: 'transparent', border: '1px dashed #2a2a2a', borderRadius: '10px', padding: '12px', color: '#444',
+          fontSize: '12px', fontFamily: "'DM Mono', monospace", cursor: 'pointer', marginTop: '4px', letterSpacing: '0.5px' }}>
+        + LOG ONE-OFF MEAL
+      </button>
     </div>
   );
 }
@@ -418,7 +500,7 @@ function WeekView({ days, slots, onCheck, onDaySelect }: { days: Date[], slots: 
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
       {days.map(day => {
         const dateStr = format(day, 'yyyy-MM-dd');
-        const daySlots = slots.filter(s => s.plan_date.startsWith(dateStr));
+        const daySlots = slots.filter(s => s.plan_date === dateStr);
         const checked = daySlots.filter(s => s.checked_off).length;
         const pct = daySlots.length > 0 ? (checked / daySlots.length) * 100 : 0;
         return (
