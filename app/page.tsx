@@ -1,6 +1,7 @@
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { format, startOfWeek, addDays, isToday } from 'date-fns';
+
 
 function PinScreen({ onUnlock }: { onUnlock: () => void }) {
   const [pin, setPin] = useState('');
@@ -95,7 +96,7 @@ interface PlanSlot {
   name: string; calories: number; protein: number; carbs: number; fiber: number; fat: number; notes?: string;
 }
 
-type View = 'today' | 'week' | 'meals';
+type View = 'today' | 'week' | 'meals' | 'chat';
 
 export default function App() {
   const [unlocked, setUnlocked] = useState(false);
@@ -125,6 +126,11 @@ function AppInner() {
   const [showOneOff, setShowOneOff] = useState(false);
   const [oneOffForm, setOneOffForm] = useState({ name:'', category:'dinner', calories:'', protein:'', carbs:'', fiber:'', fat:'', notes:'' });
   const [loading, setLoading] = useState(false);
+  const [chatMessages, setChatMessages] = useState<{id: number, role: 'user'|'assistant', content: string}[]>([]);
+  const [chatInput, setChatInput] = useState('');
+  const [chatLoading, setChatLoading] = useState(false);
+  const [chatUnread, setChatUnread] = useState(false);
+  const [chatLoaded, setChatLoaded] = useState(false);
 
   const fetchPlan = useCallback(async () => {
     setLoading(true);
@@ -144,6 +150,66 @@ function AppInner() {
 
   useEffect(() => { fetchPlan(); }, [fetchPlan]);
   useEffect(() => { fetchMeals(); }, [fetchMeals]);
+  useEffect(() => {
+    if (view !== 'chat') return;
+    setChatUnread(false);
+    if (chatLoaded) return;
+    async function load() {
+      const res = await fetch('/api/chat');
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setChatMessages(data.map((m: any) => ({ id: m.id, role: m.role, content: m.content })));
+      }
+      setChatLoaded(true);
+    }
+    load();
+  }, [view, chatLoaded]);
+  useEffect(() => {
+    async function setup() {
+      if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+      navigator.serviceWorker.addEventListener('message', (e: MessageEvent) => {
+        if (e.data?.type === 'OPEN_CHAT') setView('chat');
+      });
+      try {
+        const reg = await navigator.serviceWorker.register('/sw.js');
+        const permission = await Notification.requestPermission();
+        if (permission !== 'granted') return;
+        const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+        if (!vapidKey) return;
+        const sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: vapidKey,
+        });
+        await fetch('/api/push/subscribe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ subscription: sub }),
+        });
+      } catch {}
+    }
+    setup();
+  }, []);
+
+  const sendChatMessage = async () => {
+    if (!chatInput.trim() || chatLoading) return;
+    const msg = chatInput.trim();
+    setChatInput('');
+    setChatMessages(prev => [...prev, { id: Date.now(), role: 'user', content: msg }]);
+    setChatLoading(true);
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: msg }),
+      });
+      const data = await res.json();
+      if (data.response) {
+        setChatMessages(prev => [...prev, { id: Date.now() + 1, role: 'assistant', content: data.response }]);
+      }
+    } catch {} finally {
+      setChatLoading(false);
+    }
+  };
 
   const checkOff = async (slot: PlanSlot) => {
     const newVal = !slot.checked_off;
@@ -261,6 +327,9 @@ function AppInner() {
         {view === 'meals' && (
           <MealsView meals={meals} onAdd={() => setShowAddMeal(true)} onEdit={openEditMeal} />
         )}
+        {view === 'chat' && (
+          <ChatView messages={chatMessages} input={chatInput} onInputChange={setChatInput} onSend={sendChatMessage} loading={chatLoading} />
+        )}
       </div>
 
       {/* Bottom nav */}
@@ -269,12 +338,18 @@ function AppInner() {
           { key: 'today', label: 'Today', icon: '◉' },
           { key: 'week', label: 'Week', icon: '▦' },
           { key: 'meals', label: 'Meals', icon: '≡' },
+          { key: 'chat', label: 'Chat', icon: '💬' },
         ].map(tab => (
           <button key={tab.key} onClick={() => setView(tab.key as View)}
             style={{ flex: 1, background: 'none', border: 'none', color: view === tab.key ? '#c8b89a' : '#555',
               fontSize: '10px', fontFamily: "'DM Mono', monospace", cursor: 'pointer', padding: '8px 0',
               display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', transition: 'color 0.2s' }}>
-            <span style={{ fontSize: '18px' }}>{tab.icon}</span>
+            <span style={{ fontSize: '18px', position: 'relative', display: 'inline-block' }}>
+              {tab.icon}
+              {tab.key === 'chat' && chatUnread && (
+                <span style={{ position: 'absolute', top: 0, right: '-3px', width: '7px', height: '7px', borderRadius: '50%', background: '#993C1D', border: '1px solid #111' }} />
+              )}
+            </span>
             {tab.label.toUpperCase()}
           </button>
         ))}
@@ -568,6 +643,77 @@ function MealsView({ meals, onAdd, onEdit }: { meals: Meal[], onAdd: () => void,
           </div>
         );
       })}
+    </div>
+  );
+}
+
+function ChatView({ messages, input, onInputChange, onSend, loading }: {
+  messages: {id: number, role: 'user'|'assistant', content: string}[];
+  input: string;
+  onInputChange: (v: string) => void;
+  onSend: () => void;
+  loading: boolean;
+}) {
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, loading]);
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 160px)' }}>
+      <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '12px', paddingBottom: '16px' }}>
+        {messages.length === 0 && !loading && (
+          <div style={{ textAlign: 'center', padding: '40px 20px', color: '#444' }}>
+            <div style={{ fontSize: '40px', marginBottom: '12px' }}>💬</div>
+            <div style={{ fontSize: '13px', fontFamily: "'DM Mono', monospace" }}>COACH BRIGGS IS READY</div>
+          </div>
+        )}
+        {messages.map(msg => (
+          <div key={msg.id} style={{ display: 'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start', alignItems: 'flex-end', gap: '8px' }}>
+            {msg.role === 'assistant' && (
+              <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#993C1D', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 700, color: '#fff', flexShrink: 0, fontFamily: "'DM Mono', monospace" }}>
+                CB
+              </div>
+            )}
+            <div style={{
+              maxWidth: '80%', padding: '10px 14px',
+              borderRadius: msg.role === 'user' ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
+              background: msg.role === 'user' ? '#c8b89a' : '#1e1e1e',
+              color: msg.role === 'user' ? '#0a0a0a' : '#f0ece4',
+              fontSize: '14px', lineHeight: '1.5',
+            }}>
+              {msg.content}
+            </div>
+          </div>
+        ))}
+        {loading && (
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: '8px' }}>
+            <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#993C1D', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 700, color: '#fff', flexShrink: 0, fontFamily: "'DM Mono', monospace" }}>
+              CB
+            </div>
+            <div style={{ padding: '10px 14px', borderRadius: '18px 18px 18px 4px', background: '#1e1e1e', color: '#555', fontSize: '13px', fontFamily: "'DM Mono', monospace" }}>
+              TYPING...
+            </div>
+          </div>
+        )}
+        <div ref={bottomRef} />
+      </div>
+      <div style={{ display: 'flex', gap: '8px', paddingTop: '12px', borderTop: '1px solid #1e1e1e' }}>
+        <input
+          value={input}
+          onChange={e => onInputChange(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && !e.shiftKey && onSend()}
+          placeholder="Message Briggs..."
+          style={{ flex: 1, background: '#141414', border: '1px solid #2a2a2a', borderRadius: '20px', padding: '10px 16px', color: '#f0ece4', fontSize: '14px', outline: 'none' }}
+        />
+        <button
+          onClick={onSend}
+          disabled={!input.trim() || loading}
+          style={{ width: '40px', height: '40px', borderRadius: '50%', background: input.trim() && !loading ? '#c8b89a' : '#1e1e1e', border: 'none', cursor: input.trim() && !loading ? 'pointer' : 'default', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px', transition: 'background 0.2s', flexShrink: 0 }}>
+          ↑
+        </button>
+      </div>
     </div>
   );
 }
