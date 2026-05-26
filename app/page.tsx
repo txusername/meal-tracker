@@ -297,7 +297,7 @@ function AppInner() {
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
   return (
-    <div style={{ minHeight: '100vh', background: '#0a0a0a', color: '#f0ece4', fontFamily: "'DM Sans', sans-serif", paddingBottom: '80px' }}>
+    <div style={{ minHeight: '100vh', background: '#0a0a0a', color: '#f0ece4', fontFamily: "'DM Sans', sans-serif", paddingBottom: '80px', overflow: view === 'chat' ? 'hidden' : undefined }}>
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
 
       {/* Header */}
@@ -661,8 +661,8 @@ function ChatView({ messages, input, onInputChange, onSend, loading }: {
   }, [messages, loading]);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 160px)' }}>
-      <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '12px', paddingBottom: '16px' }}>
+    <div style={{ position: 'fixed', top: '70px', bottom: '72px', left: 0, right: 0, display: 'flex', flexDirection: 'column' }}>
+      <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '12px', padding: '16px 20px' }}>
         {messages.length === 0 && !loading && (
           <div style={{ textAlign: 'center', padding: '40px 20px', color: '#444' }}>
             <div style={{ fontSize: '40px', marginBottom: '12px' }}>💬</div>
@@ -699,7 +699,7 @@ function ChatView({ messages, input, onInputChange, onSend, loading }: {
         )}
         <div ref={bottomRef} />
       </div>
-      <div style={{ display: 'flex', gap: '8px', paddingTop: '12px', borderTop: '1px solid #1e1e1e' }}>
+      <div style={{ display: 'flex', gap: '8px', padding: '12px 20px', borderTop: '1px solid #1e1e1e', background: '#0a0a0a' }}>
         <input
           value={input}
           onChange={e => onInputChange(e.target.value)}
