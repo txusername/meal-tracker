@@ -38,7 +38,7 @@ export async function GET() {
     const pct = total > 0 ? Math.round((checked / total) * 100) : 0;
 
     const response = await client.messages.create({
-      model: 'claude-sonnet-4-6',
+      model: 'claude-haiku-4-5-20251001',
       max_tokens: 200,
       system: CHECKIN_SYSTEM,
       messages: [{
