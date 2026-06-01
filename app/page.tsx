@@ -322,7 +322,7 @@ function AppInner() {
           <TodayView slots={todaySlots} onCheck={checkOff} onLogOneOff={() => setShowOneOff(true)} />
         )}
         {view === 'week' && (
-          <WeekView days={weekDays} slots={planSlots} onCheck={checkOff} onDaySelect={d => { setSelectedDate(d); setView('today'); }} />
+          <WeekView days={weekDays} slots={planSlots} onCheck={checkOff} onDaySelect={d => { setSelectedDate(d); setView('today'); }} onNavigate={dir => { const next = addDays(weekStart, dir * 7); setWeekStart(next); setSelectedDate(next); }} />
         )}
         {view === 'meals' && (
           <MealsView meals={meals} onAdd={() => setShowAddMeal(true)} onEdit={openEditMeal} />
@@ -570,9 +570,16 @@ function TodayView({ slots, onCheck, onLogOneOff }: { slots: PlanSlot[], onCheck
   );
 }
 
-function WeekView({ days, slots, onCheck, onDaySelect }: { days: Date[], slots: PlanSlot[], onCheck: (s: PlanSlot) => void, onDaySelect: (d: Date) => void }) {
+function WeekView({ days, slots, onCheck, onDaySelect, onNavigate }: { days: Date[], slots: PlanSlot[], onCheck: (s: PlanSlot) => void, onDaySelect: (d: Date) => void, onNavigate: (dir: 1 | -1) => void }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <button onClick={() => onNavigate(-1)} style={{ background: 'none', border: 'none', color: '#666', fontSize: '24px', cursor: 'pointer', padding: '4px 8px', lineHeight: 1 }}>‹</button>
+        <span style={{ fontSize: '12px', color: '#666', fontFamily: "'DM Mono', monospace" }}>
+          {format(days[0], 'MMM d')} – {format(days[6], 'MMM d, yyyy')}
+        </span>
+        <button onClick={() => onNavigate(1)} style={{ background: 'none', border: 'none', color: '#666', fontSize: '24px', cursor: 'pointer', padding: '4px 8px', lineHeight: 1 }}>›</button>
+      </div>
       {days.map(day => {
         const dateStr = format(day, 'yyyy-MM-dd');
         const daySlots = slots.filter(s => s.plan_date.startsWith(dateStr));
