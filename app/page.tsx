@@ -125,6 +125,9 @@ function AppInner() {
   const [editMealForm, setEditMealForm] = useState({ name:'', category:'breakfast', calories:'', protein:'', carbs:'', fiber:'', fat:'', notes:'' });
   const [showOneOff, setShowOneOff] = useState(false);
   const [oneOffForm, setOneOffForm] = useState({ name:'', category:'dinner', calories:'', protein:'', carbs:'', fiber:'', fat:'', notes:'' });
+  const [logMealMode, setLogMealMode] = useState<'library' | 'oneoff'>('library');
+  const [librarySlot, setLibrarySlot] = useState('dinner');
+  const [mealSearch, setMealSearch] = useState('');
   const [loading, setLoading] = useState(false);
   const [chatMessages, setChatMessages] = useState<{id: number, role: 'user'|'assistant', content: string}[]>([]);
   const [chatInput, setChatInput] = useState('');
@@ -264,6 +267,17 @@ function AppInner() {
     fetchMeals();
   };
 
+  const addLibraryMeal = async (meal: Meal) => {
+    await fetch('/api/plan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ plan_date: format(selectedDate, 'yyyy-MM-dd'), meal_slot: librarySlot, meal_id: meal.id }),
+    });
+    setShowOneOff(false);
+    setMealSearch('');
+    fetchPlan();
+  };
+
   const logOneOff = async () => {
     if (!oneOffForm.name || !oneOffForm.calories) return;
     const mealRes = await fetch('/api/meals', {
@@ -355,42 +369,94 @@ function AppInner() {
         ))}
       </div>
 
-      {/* One-Off Meal Modal */}
+      {/* Log Meal Modal */}
       {showOneOff && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'flex-end', zIndex: 100 }}>
-          <div style={{ background: '#141414', width: '100%', borderRadius: '20px 20px 0 0', padding: '24px 20px', maxHeight: '90vh', overflowY: 'auto' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-              <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 600 }}>Log One-Off Meal</h2>
-              <button onClick={() => setShowOneOff(false)} style={{ background: 'none', border: 'none', color: '#666', fontSize: '24px', cursor: 'pointer' }}>×</button>
+          <div style={{ background: '#141414', width: '100%', borderRadius: '20px 20px 0 0', padding: '24px 20px', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 600 }}>Log Meal</h2>
+              <button onClick={() => { setShowOneOff(false); setMealSearch(''); }} style={{ background: 'none', border: 'none', color: '#666', fontSize: '24px', cursor: 'pointer' }}>×</button>
             </div>
-            <p style={{ fontSize: '12px', color: '#555', marginBottom: '20px', fontFamily: "'DM Mono', monospace" }}>SAVED TO TODAY ONLY · NOT ADDED TO LIBRARY</p>
-            {[
-              { key: 'name', label: 'Meal Name', type: 'text' },
-              { key: 'calories', label: 'Calories', type: 'number' },
-              { key: 'protein', label: 'Protein (g)', type: 'number' },
-              { key: 'carbs', label: 'Carbs (g)', type: 'number' },
-              { key: 'fiber', label: 'Fiber (g)', type: 'number' },
-              { key: 'fat', label: 'Fat (g)', type: 'number' },
-              { key: 'notes', label: 'Notes', type: 'text' },
-            ].map(f => (
-              <div key={f.key} style={{ marginBottom: '12px' }}>
-                <label style={{ fontSize: '11px', color: '#666', fontFamily: "'DM Mono', monospace", display: 'block', marginBottom: '4px' }}>{f.label.toUpperCase()}</label>
-                <input type={f.type} value={(oneOffForm as any)[f.key]}
-                  onChange={e => setOneOffForm(prev => ({ ...prev, [f.key]: e.target.value }))}
-                  style={{ width: '100%', background: '#1e1e1e', border: '1px solid #2a2a2a', borderRadius: '8px', padding: '10px 12px', color: '#f0ece4', fontSize: '14px', boxSizing: 'border-box' }} />
+
+            {/* Tab switcher */}
+            <div style={{ display: 'flex', background: '#1a1a1a', borderRadius: '8px', padding: '3px', marginBottom: '16px', flexShrink: 0 }}>
+              {(['library', 'oneoff'] as const).map(mode => (
+                <button key={mode} onClick={() => setLogMealMode(mode)} style={{
+                  flex: 1, background: logMealMode === mode ? '#2a2a2a' : 'none', border: 'none',
+                  borderRadius: '6px', padding: '8px', color: logMealMode === mode ? '#f0ece4' : '#555',
+                  fontSize: '12px', fontFamily: "'DM Mono', monospace", cursor: 'pointer', transition: 'all 0.15s',
+                }}>
+                  {mode === 'library' ? 'FROM LIBRARY' : 'ONE-OFF'}
+                </button>
+              ))}
+            </div>
+
+            {logMealMode === 'library' && (
+              <>
+                <div style={{ marginBottom: '12px', flexShrink: 0 }}>
+                  <label style={{ fontSize: '11px', color: '#666', fontFamily: "'DM Mono', monospace", display: 'block', marginBottom: '4px' }}>MEAL SLOT</label>
+                  <select value={librarySlot} onChange={e => setLibrarySlot(e.target.value)}
+                    style={{ width: '100%', background: '#1e1e1e', border: '1px solid #2a2a2a', borderRadius: '8px', padding: '10px 12px', color: '#f0ece4', fontSize: '14px' }}>
+                    {MEAL_SLOTS.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
+                  </select>
+                </div>
+                <input
+                  placeholder="Search meals..."
+                  value={mealSearch}
+                  onChange={e => setMealSearch(e.target.value)}
+                  style={{ width: '100%', background: '#1e1e1e', border: '1px solid #2a2a2a', borderRadius: '8px', padding: '10px 12px', color: '#f0ece4', fontSize: '14px', boxSizing: 'border-box', marginBottom: '12px', flexShrink: 0, outline: 'none' }}
+                />
+                <div style={{ overflowY: 'auto', flex: 1 }}>
+                  {meals
+                    .filter(m => !mealSearch || m.name.toLowerCase().includes(mealSearch.toLowerCase()))
+                    .map(meal => (
+                      <button key={meal.id} onClick={() => addLibraryMeal(meal)}
+                        style={{ width: '100%', background: '#1e1e1e', border: '1px solid #2a2a2a', borderRadius: '10px', padding: '12px 14px', marginBottom: '8px', textAlign: 'left', cursor: 'pointer' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                          <span style={{ fontSize: '14px', fontWeight: 500, color: '#f0ece4' }}>{meal.name}</span>
+                          <span style={{ fontSize: '13px', color: '#c8b89a', fontFamily: "'DM Mono', monospace" }}>{meal.calories} cal</span>
+                        </div>
+                        <div style={{ fontSize: '11px', color: '#555', fontFamily: "'DM Mono', monospace", marginTop: '4px' }}>
+                          P{meal.protein}g · C{meal.carbs}g · Fi{meal.fiber}g · Fa{meal.fat}g
+                        </div>
+                      </button>
+                    ))}
+                </div>
+              </>
+            )}
+
+            {logMealMode === 'oneoff' && (
+              <div style={{ overflowY: 'auto', flex: 1 }}>
+                <p style={{ fontSize: '12px', color: '#555', marginBottom: '16px', marginTop: 0, fontFamily: "'DM Mono', monospace" }}>SAVED TO TODAY ONLY · NOT ADDED TO LIBRARY</p>
+                {[
+                  { key: 'name', label: 'Meal Name', type: 'text' },
+                  { key: 'calories', label: 'Calories', type: 'number' },
+                  { key: 'protein', label: 'Protein (g)', type: 'number' },
+                  { key: 'carbs', label: 'Carbs (g)', type: 'number' },
+                  { key: 'fiber', label: 'Fiber (g)', type: 'number' },
+                  { key: 'fat', label: 'Fat (g)', type: 'number' },
+                  { key: 'notes', label: 'Notes', type: 'text' },
+                ].map(f => (
+                  <div key={f.key} style={{ marginBottom: '12px' }}>
+                    <label style={{ fontSize: '11px', color: '#666', fontFamily: "'DM Mono', monospace", display: 'block', marginBottom: '4px' }}>{f.label.toUpperCase()}</label>
+                    <input type={f.type} value={(oneOffForm as any)[f.key]}
+                      onChange={e => setOneOffForm(prev => ({ ...prev, [f.key]: e.target.value }))}
+                      style={{ width: '100%', background: '#1e1e1e', border: '1px solid #2a2a2a', borderRadius: '8px', padding: '10px 12px', color: '#f0ece4', fontSize: '14px', boxSizing: 'border-box' }} />
+                  </div>
+                ))}
+                <div style={{ marginBottom: '16px' }}>
+                  <label style={{ fontSize: '11px', color: '#666', fontFamily: "'DM Mono', monospace", display: 'block', marginBottom: '4px' }}>MEAL SLOT</label>
+                  <select value={oneOffForm.category} onChange={e => setOneOffForm(prev => ({ ...prev, category: e.target.value }))}
+                    style={{ width: '100%', background: '#1e1e1e', border: '1px solid #2a2a2a', borderRadius: '8px', padding: '10px 12px', color: '#f0ece4', fontSize: '14px' }}>
+                    {MEAL_SLOTS.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
+                  </select>
+                </div>
+                <button onClick={logOneOff}
+                  style={{ width: '100%', background: '#c8b89a', color: '#0a0a0a', border: 'none', borderRadius: '10px', padding: '14px', fontSize: '15px', fontWeight: 600, cursor: 'pointer' }}>
+                  Log Meal
+                </button>
               </div>
-            ))}
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ fontSize: '11px', color: '#666', fontFamily: "'DM Mono', monospace", display: 'block', marginBottom: '4px' }}>MEAL SLOT</label>
-              <select value={oneOffForm.category} onChange={e => setOneOffForm(prev => ({ ...prev, category: e.target.value }))}
-                style={{ width: '100%', background: '#1e1e1e', border: '1px solid #2a2a2a', borderRadius: '8px', padding: '10px 12px', color: '#f0ece4', fontSize: '14px' }}>
-                {MEAL_SLOTS.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
-              </select>
-            </div>
-            <button onClick={logOneOff}
-              style={{ width: '100%', background: '#c8b89a', color: '#0a0a0a', border: 'none', borderRadius: '10px', padding: '14px', fontSize: '15px', fontWeight: 600, cursor: 'pointer' }}>
-              Log Meal
-            </button>
+            )}
           </div>
         </div>
       )}
