@@ -41,7 +41,6 @@ export async function POST(req: NextRequest) {
     const rows = await sql`
       INSERT INTO meal_plan (plan_date, meal_slot, meal_id)
       VALUES (${plan_date}, ${meal_slot}, ${meal_id})
-      ON CONFLICT (plan_date, meal_slot) DO UPDATE SET meal_id = ${meal_id}
       RETURNING *
     `;
     return NextResponse.json(rows[0]);

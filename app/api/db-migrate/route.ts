@@ -33,5 +33,10 @@ export async function GET() {
     results.push('push_subscriptions: ok');
   } catch (e: any) { results.push(`push_subscriptions: ${e.message}`); }
 
+  try {
+    await sql`ALTER TABLE meal_plan DROP CONSTRAINT IF EXISTS meal_plan_plan_date_meal_slot_key`;
+    results.push('meal_plan unique constraint: dropped');
+  } catch (e: any) { results.push(`meal_plan unique constraint: ${e.message}`); }
+
   return NextResponse.json({ success: true, results });
 }

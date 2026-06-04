@@ -220,7 +220,7 @@ function AppInner() {
     await fetch('/api/checkin', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ plan_date: slot.plan_date, meal_slot: slot.meal_slot, checked_off: newVal }),
+      body: JSON.stringify({ id: slot.id, checked_off: newVal }),
     });
   };
 
@@ -606,33 +606,37 @@ function TodayView({ slots, onCheck, onLogOneOff }: { slots: PlanSlot[], onCheck
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
       {MEAL_SLOTS.map(slot => {
-        const planSlot = slots.find(s => s.meal_slot === slot.key);
-        if (!planSlot) return null;
+        const slotItems = slots.filter(s => s.meal_slot === slot.key);
+        if (slotItems.length === 0) return null;
         return (
-          <button key={slot.key} onClick={() => onCheck(planSlot)}
-            style={{ background: planSlot.checked_off ? '#141f1a' : '#141414', border: `1px solid ${planSlot.checked_off ? '#2a4a36' : '#1e1e1e'}`,
-              borderRadius: '12px', padding: '14px 16px', cursor: 'pointer', textAlign: 'left', transition: 'all 0.2s', width: '100%' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: planSlot.checked_off ? '#1a3a26' : '#1e1e1e',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px', flexShrink: 0 }}>
-                {planSlot.checked_off ? '✓' : slot.emoji}
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                  <span style={{ fontSize: '14px', fontWeight: 500, color: planSlot.checked_off ? '#5a8a6a' : '#f0ece4',
-                    textDecoration: planSlot.checked_off ? 'line-through' : 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '180px' }}>
-                    {planSlot.name}
-                  </span>
-                  <span style={{ fontSize: '13px', color: '#c8b89a', fontFamily: "'DM Mono', monospace", flexShrink: 0, marginLeft: '8px' }}>
-                    {planSlot.calories} cal
-                  </span>
+          <div key={slot.key} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            {slotItems.map((planSlot, idx) => (
+              <button key={planSlot.id} onClick={() => onCheck(planSlot)}
+                style={{ background: planSlot.checked_off ? '#141f1a' : '#141414', border: `1px solid ${planSlot.checked_off ? '#2a4a36' : '#1e1e1e'}`,
+                  borderRadius: '12px', padding: '14px 16px', cursor: 'pointer', textAlign: 'left', transition: 'all 0.2s', width: '100%' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: planSlot.checked_off ? '#1a3a26' : '#1e1e1e',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px', flexShrink: 0 }}>
+                    {planSlot.checked_off ? '✓' : (idx === 0 ? slot.emoji : '+')}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                      <span style={{ fontSize: '14px', fontWeight: 500, color: planSlot.checked_off ? '#5a8a6a' : '#f0ece4',
+                        textDecoration: planSlot.checked_off ? 'line-through' : 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '180px' }}>
+                        {planSlot.name}
+                      </span>
+                      <span style={{ fontSize: '13px', color: '#c8b89a', fontFamily: "'DM Mono', monospace", flexShrink: 0, marginLeft: '8px' }}>
+                        {planSlot.calories} cal
+                      </span>
+                    </div>
+                    <div style={{ fontSize: '11px', color: '#555', fontFamily: "'DM Mono', monospace", marginTop: '4px' }}>
+                      {slot.label.toUpperCase()} · P{planSlot.protein}g C{planSlot.carbs}g Fi{planSlot.fiber}g Fa{planSlot.fat}g
+                    </div>
+                  </div>
                 </div>
-                <div style={{ fontSize: '11px', color: '#555', fontFamily: "'DM Mono', monospace", marginTop: '4px' }}>
-                  {slot.label.toUpperCase()} · P{planSlot.protein}g C{planSlot.carbs}g Fi{planSlot.fiber}g Fa{planSlot.fat}g
-                </div>
-              </div>
-            </div>
-          </button>
+              </button>
+            ))}
+          </div>
         );
       })}
       <button onClick={onLogOneOff}

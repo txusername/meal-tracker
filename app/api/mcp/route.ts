@@ -22,10 +22,10 @@ export async function POST(req: NextRequest) {
         // data: array of { plan_date, meal_slot, meal_id }
         const results = [];
         for (const slot of data) {
+          await sql`DELETE FROM meal_plan WHERE plan_date = ${slot.plan_date} AND meal_slot = ${slot.meal_slot}`;
           const rows = await sql`
             INSERT INTO meal_plan (plan_date, meal_slot, meal_id)
             VALUES (${slot.plan_date}, ${slot.meal_slot}, ${slot.meal_id})
-            ON CONFLICT (plan_date, meal_slot) DO UPDATE SET meal_id = ${slot.meal_id}, checked_off = false
             RETURNING *
           `;
           results.push(rows[0]);
