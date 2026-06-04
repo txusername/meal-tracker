@@ -333,7 +333,12 @@ function AppInner() {
       {/* Content */}
       <div style={{ padding: '20px' }}>
         {view === 'today' && (
-          <TodayView slots={todaySlots} onCheck={checkOff} onLogOneOff={() => setShowOneOff(true)} />
+          <TodayView slots={todaySlots} onCheck={checkOff} onLogOneOff={() => {
+            const taken = new Set(todaySlots.map(s => s.meal_slot));
+            const firstFree = MEAL_SLOTS.find(s => !taken.has(s.key));
+            setLibrarySlot(firstFree?.key || MEAL_SLOTS[0].key);
+            setShowOneOff(true);
+          }} />
         )}
         {view === 'week' && (
           <WeekView days={weekDays} slots={planSlots} onCheck={checkOff} onDaySelect={d => { setSelectedDate(d); setView('today'); }} onNavigate={dir => { const next = addDays(weekStart, dir * 7); setWeekStart(next); setSelectedDate(next); }} />
@@ -397,7 +402,10 @@ function AppInner() {
                   <label style={{ fontSize: '11px', color: '#666', fontFamily: "'DM Mono', monospace", display: 'block', marginBottom: '4px' }}>MEAL SLOT</label>
                   <select value={librarySlot} onChange={e => setLibrarySlot(e.target.value)}
                     style={{ width: '100%', background: '#1e1e1e', border: '1px solid #2a2a2a', borderRadius: '8px', padding: '10px 12px', color: '#f0ece4', fontSize: '14px' }}>
-                    {MEAL_SLOTS.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
+                    {MEAL_SLOTS.map(s => {
+                      const taken = todaySlots.some(ts => ts.meal_slot === s.key);
+                      return <option key={s.key} value={s.key}>{s.label}{taken ? ' (filled)' : ''}</option>;
+                    })}
                   </select>
                 </div>
                 <input
