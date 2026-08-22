@@ -47,16 +47,62 @@ export async function POST(req: NextRequest) {
       case 'get_compliance': {
         // data: { start_date, end_date }
         const rows = await sql`
-          SELECT 
-            plan_date,
-            COUNT(*) as total_slots,
-            SUM(CASE WHEN checked_off THEN 1 ELSE 0 END) as checked_slots
-          FROM meal_plan
-          WHERE plan_date BETWEEN ${data.start_date} AND ${data.end_date}
-          GROUP BY plan_date
-          ORDER BY plan_date
+          SELECT
+            mp.plan_date::text as plan_date,
+            mp.meal_slot,
+            mp.checked_off,
+            m.name,
+            m.calories, m.protein, m.carbs, m.fat, m.fiber
+          FROM meal_plan mp
+          JOIN meals m ON mp.meal_id = m.id
+          WHERE mp.plan_date BETWEEN ${data.start_date} AND ${data.end_date}
+          ORDER BY mp.plan_date, mp.meal_slot
         `;
-        return NextResponse.json({ compliance: rows });
+
+        const byDate = new Map<string, any>();
+        for (const row of rows) {
+          if (!byDate.has(row.plan_date)) {
+            byDate.set(row.plan_date, {
+              date: row.plan_date,
+              meals_planned: 0,
+              meals_checked: 0,
+              calories: 0,
+              protein: 0,
+              carbs: 0,
+              fat: 0,
+              fiber: 0,
+              meals: [],
+            });
+          }
+          const day = byDate.get(row.plan_date);
+          const checked = !!row.checked_off;
+          day.meals_planned += 1;
+          if (checked) {
+            day.meals_checked += 1;
+            day.calories += Number(row.calories);
+            day.protein += Number(row.protein);
+            day.carbs += Number(row.carbs);
+            day.fat += Number(row.fat);
+            day.fiber += Number(row.fiber);
+          }
+          day.meals.push({
+            meal_slot: row.meal_slot,
+            name: row.name,
+            checked,
+            calories: Number(row.calories),
+            protein: Number(row.protein),
+            carbs: Number(row.carbs),
+            fat: Number(row.fat),
+            fiber: Number(row.fiber),
+          });
+        }
+
+        const compliance = Array.from(byDate.values()).map((day) => ({
+          ...day,
+          compliance_pct: day.meals_planned > 0 ? Math.round((day.meals_checked / day.meals_planned) * 100) : 0,
+        }));
+
+        return NextResponse.json({ compliance });
       }
 
       case 'get_meals': {
