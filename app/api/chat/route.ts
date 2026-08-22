@@ -28,7 +28,7 @@ const tools: Anthropic.Tool[] = [
   },
   {
     name: 'get_meal_compliance',
-    description: "Get Drew's meal compliance data for recent days",
+    description: "Get Drew's meal compliance and macro nutrition data for recent days — per-day checked/planned counts, compliance %, and macro totals (calories, protein, carbs, fat, fiber) from checked-off meals",
     input_schema: {
       type: 'object' as const,
       properties: {
@@ -58,11 +58,60 @@ async function getMealCompliance(days = 7) {
   startDate.setDate(startDate.getDate() - days);
   const startStr = startDate.toISOString().split('T')[0];
   const rows = await sql`
-    SELECT plan_date::text, COUNT(*)::int as total, COUNT(CASE WHEN checked_off THEN 1 END)::int as checked
-    FROM meal_plan WHERE plan_date >= ${startStr}
-    GROUP BY plan_date ORDER BY plan_date DESC
+    SELECT
+      mp.plan_date::text as plan_date,
+      mp.meal_slot,
+      mp.checked_off,
+      m.name,
+      m.calories, m.protein, m.carbs, m.fat, m.fiber
+    FROM meal_plan mp
+    JOIN meals m ON mp.meal_id = m.id
+    WHERE mp.plan_date >= ${startStr}
+    ORDER BY mp.plan_date DESC, mp.meal_slot
   `;
-  return rows;
+
+  const byDate = new Map<string, any>();
+  for (const row of rows) {
+    if (!byDate.has(row.plan_date)) {
+      byDate.set(row.plan_date, {
+        date: row.plan_date,
+        meals_planned: 0,
+        meals_checked: 0,
+        calories: 0,
+        protein: 0,
+        carbs: 0,
+        fat: 0,
+        fiber: 0,
+        meals: [],
+      });
+    }
+    const day = byDate.get(row.plan_date);
+    const checked = !!row.checked_off;
+    day.meals_planned += 1;
+    if (checked) {
+      day.meals_checked += 1;
+      day.calories += Number(row.calories);
+      day.protein += Number(row.protein);
+      day.carbs += Number(row.carbs);
+      day.fat += Number(row.fat);
+      day.fiber += Number(row.fiber);
+    }
+    day.meals.push({
+      meal_slot: row.meal_slot,
+      name: row.name,
+      checked,
+      calories: Number(row.calories),
+      protein: Number(row.protein),
+      carbs: Number(row.carbs),
+      fat: Number(row.fat),
+      fiber: Number(row.fiber),
+    });
+  }
+
+  return Array.from(byDate.values()).map((day) => ({
+    ...day,
+    compliance_pct: day.meals_planned > 0 ? Math.round((day.meals_checked / day.meals_planned) * 100) : 0,
+  }));
 }
 
 async function executeTool(name: string, input: Record<string, unknown>) {
