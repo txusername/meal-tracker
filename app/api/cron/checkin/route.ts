@@ -1,16 +1,17 @@
 import { NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import { sql } from '../../../../lib/db';
+import { aggregateCompliance } from '../../../../lib/compliance';
 import { sendPushToAll } from '../../../../lib/push';
 
 const client = new Anthropic();
 
-const CHECKIN_SYSTEM = `You are Coach Briggs, a hardcore bodybuilding coach. Generate a brief, direct mid-week check-in message (2-3 sentences max) based on the workout and meal compliance data provided. Be specific, motivating, and direct. No fluff.`;
+const CHECKIN_SYSTEM = `You are Coach Briggs, a hardcore bodybuilding coach. Generate a brief, direct mid-week check-in message (2-3 sentences max) based on the workout and meal/macro data provided. Reference actual specifics — exercises, sets/reps/weight, calories, protein, a particular day that stood out — instead of just a generic percentage. Be motivating and direct. No fluff.`;
 
 export async function GET() {
   try {
     const hevyKey = process.env.HEVY_API_KEY;
-    let workoutSummary = 'No workout data available';
+    let workoutData: unknown = 'No workout data available';
 
     if (hevyKey) {
       try {
@@ -19,10 +20,7 @@ export async function GET() {
         });
         if (res.ok) {
           const data = await res.json();
-          const workouts = (data.workouts || []) as any[];
-          workoutSummary = workouts.length > 0
-            ? workouts.map((w: any) => `${w.name || 'Workout'} on ${new Date(w.start_time).toLocaleDateString()}`).join('; ')
-            : 'No workouts logged yet this week';
+          workoutData = data.workouts || [];
         }
       } catch {}
     }
@@ -30,12 +28,19 @@ export async function GET() {
     const weekStart = new Date();
     weekStart.setDate(weekStart.getDate() - 7);
     const startStr = weekStart.toISOString().split('T')[0];
-    const compliance = await sql`
-      SELECT COUNT(*)::int as total, COUNT(CASE WHEN checked_off THEN 1 END)::int as checked
-      FROM meal_plan WHERE plan_date >= ${startStr}
+    const rows = await sql`
+      SELECT
+        mp.plan_date::text as plan_date,
+        mp.meal_slot,
+        mp.checked_off,
+        m.name,
+        m.calories, m.protein, m.carbs, m.fat, m.fiber
+      FROM meal_plan mp
+      JOIN meals m ON mp.meal_id = m.id
+      WHERE mp.plan_date >= ${startStr}
+      ORDER BY mp.plan_date, mp.meal_slot
     `;
-    const { total, checked } = (compliance[0] as any) || { total: 0, checked: 0 };
-    const pct = total > 0 ? Math.round((checked / total) * 100) : 0;
+    const compliance = aggregateCompliance(rows as any);
 
     const response = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
@@ -43,7 +48,7 @@ export async function GET() {
       system: CHECKIN_SYSTEM,
       messages: [{
         role: 'user',
-        content: `Recent workouts: ${workoutSummary}\nMeal compliance (last 7 days): ${checked}/${total} meals (${pct}%). Write Drew's mid-week check-in.`,
+        content: `Recent workouts (last 5, raw Hevy data): ${JSON.stringify(workoutData)}\n\nMeal compliance & macros, last 7 days, per day: ${JSON.stringify(compliance)}\n\nWrite Drew's mid-week check-in.`,
       }],
     });
 
